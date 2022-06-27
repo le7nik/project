@@ -1,0 +1,56 @@
+http://www.plantuml.com/plantuml/uml/SyfFKj2rKt3CoKnELR1Io4ZDoSa70000
+
+@startuml
+Actor "Клиент" as User
+Participant "Веб Сервис" as WS
+Participant "Микросервис Информер" as MSI
+Participant "База Логов" as BL
+Actor "Админисратор" as Adm
+
+Activate User 
+Activate WS
+
+User -> WS: "Вход в Веб Сервис"
+
+Activate MSI
+Activate BL
+
+WS -> MSI: "Запрос на наличие уведомлений при входе в систему"
+MSI -\ BL: "Запись о запросе при входе в систему"
+MSI --> WS: "Ответ о наличии"
+MSI -\ BL: "Запись о ответе со статусом"
+
+Deactivate MSI
+
+WS --> User: "Вывод на главный экран"
+
+Activate Adm
+Activate MSI
+
+Adm -> MSI: "Размещение уведомления"
+MSI -\ BL: "Запись о запросе на размещение уведомления"
+MSI --> Adm: "Уведомление размещено"
+
+Deactivate Adm
+
+MSI -\ BL: "Запись о размещении уведомления"
+MSI -\ WS: "Уведомление о наличии записи"
+MSI -\ BL: "Запись об уведомлении Вебсервиса"
+WS -> MSI: "Запрос на забор записи"
+MSI --> WS: "Отправка записи"
+
+Deactivate MSI
+
+WS -\ User: "Есть записи в наличии"
+User -> WS: "Запрос на предоставление"
+WS --> User: "Демонстрация записи на главном экране"
+User -\ WS: "Подтверждаю получение"
+
+Deactivate User
+WS -\ BL: "Запись пользователем получена"
+
+Deactivate BL
+Deactivate WS
+
+
+@enduml
