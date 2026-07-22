@@ -1,5 +1,170 @@
-pip install requests matplotlib ccxt beautifulsoup4 #установка зависимостей и библиотек
+#-----------------установка зависимостей и библиотек-----------------
 
+pip install requests matplotlib ccxt beautifulsoup4 
+import requests
+import matplotlib.pyplot as plt
+import numpy as np
+from datetime import datetime
+import ccxt
+from bs4 import BeautifulSoup
+
+# ---------- Сбор данных ----------
+def get_crypto_fear_greed():
+    """Криптовалютный Fear & Greed Index (Alternative.me)"""
+    url = "https://api.alternative.me/fng/"
+    try:
+        resp = requests.get(url, timeout=10).json()
+        value = int(resp['data'][0]['value'])
+        classification = resp['data'][0]['value_classification']
+        return value, classification
+    except Exception as e:
+        print(f"[Ошибка] Alternative.me: {e}")
+        return None, None
+
+def get_cnn_fear_greed():
+    """
+    Индекс страха и жадности CNN (фондовый рынок).
+    Используем неофициальный API: https://fear-and-greed-index.p.rapidapi.com/
+    Требует бесплатного ключа RapidAPI. Без ключа вернёт None.
+    """
+    # Замените на свой ключ RapidAPI или используйте парсинг
+    RAPIDAPI_KEY = "ваш_ключ_rapidapi"  # оставьте пустым, если не хотите
+    if not RAPIDAPI_KEY:
+        print("[CNN] API-ключ не задан, используется парсинг HTML (ненадёжно).")
+        return parse_cnn_html()
+    
+    url = "https://fear-and-greed-index.p.rapidapi.com/v1/fgi"
+    headers = {
+        "X-RapidAPI-Key": RAPIDAPI_KEY,
+        "X-RapidAPI-Host": "fear-and-greed-index.p.rapidapi.com"
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=10).json()
+        value = int(resp['fgi']['value'])
+        classification = resp['fgi']['valueText']
+        return value, classification
+    except Exception as e:
+        print(f"[Ошибка] CNN API: {e}")
+        return None, None
+
+def parse_cnn_html():
+    """Парсинг страницы CNN Money (может сломаться)"""
+    try:
+        url = "https://money.cnn.com/data/fear-and-greed/"
+        resp = requests.get(url, timeout=10)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        # Ищем значение индекса (структура может меняться)
+        elem = soup.find("span", class_="fear-greed-index-value")
+        if elem:
+            value = int(elem.text)
+            # Классификацию не извлекаем
+            return value, "CNN data"
+    except Exception as e:
+        print(f"[Ошибка] CNN HTML: {e}")
+    return None, None
+
+def get_coinbase_premium():
+    """
+    Coinbase Premium Index = (BTC_USD_Coinbase / BTC_USDT_Binance - 1) * 100
+    Преобразуем в шкалу 0-100: нормализуем через сигмоиду, 
+    где 0% ~ страх (сильная отрицательная премия), 
+    100% ~ жадность (сильная положительная премия).
+    """
+    try:
+        coinbase = ccxt.coinbase()
+        binance = ccxt.binance()
+        # Данные по BTC
+        ticker_cb = coinbase.fetch_ticker('BTC/USD')
+        ticker_bn = binance.fetch_ticker('BTC/USDT')
+        price_cb = ticker_cb['last']
+        price_bn = ticker_bn['last']
+        premium_pct = (price_cb / price_bn - 1) * 100
+        
+        # Сигмоида для приведения к диапазону ~20–80 вокруг 0
+        # (центр = 0, растёт от -3% до +3% примерно)
+        value = 50 + 50 * np.tanh(premium_pct * 0.8)  # подбираем масштаб
+        value = int(np.clip(value, 0, 100))
+        classification = "Premium" if premium_pct > 0 else "Discount"
+        return value, f"{classification} ({premium_pct:.2f}%)"
+    except Exception as e:
+        print(f"[Ошибка] Coinbase Premium: {e}")
+        return None, None
+
+# ---------- Визуализация ----------
+def plot_gauge(sources_data):
+    """
+    sources_data – список кортежей (название, значение, классификация)
+    """
+    fig, ax = plt.subplots(figsize=(10, 1.5))
+    
+    # Фоновая шкала
+    ax.barh(0, 100, 0.4, color='lightgray', edgecolor='gray', linewidth=0.5)
+    
+    # Цвета зон
+    zones = [
+        (0, 25, 'red', 'Extreme Fear'),
+        (25, 45, 'orange', 'Fear'),
+        (45, 55, 'yellow', 'Neutral'),
+        (55, 75, 'lime', 'Greed'),
+        (75, 100, 'green', 'Extreme Greed')
+    ]
+    for start, end, color, label in zones:
+        ax.barh(0, end-start, 0.4, left=start, color=color, alpha=0.3)
+        ax.text(start + (end-start)/2, 0.1, label, ha='center', va='bottom', fontsize=7, color=color)
+    
+    # Стрелки источников
+    colors = ['blue', 'red', 'purple', 'orange', 'brown']
+    offset_y = 0.15  # высота размещения стрелок над полосой
+    for i, (name, val, cls) in enumerate(sources_data):
+        if val is None:
+            print(f"Нет данных для {name}, пропускаем стрелку.")
+            continue
+        color = colors[i % len(colors)]
+        # Стрелка вниз от метки к точке на шкале
+        ax.annotate(
+            '', xy=(val, 0.0), xytext=(val, offset_y),
+            arrowprops=dict(arrowstyle='->', color=color, lw=2)
+        )
+        # Метка над стрелкой
+        ax.text(val, offset_y + 0.07, f"{name}\n{val} ({cls})", ha='center', va='bottom',
+                fontsize=8, color=color, fontweight='bold')
+    
+    # Оформление
+    ax.set_xlim(-5, 105)
+    ax.set_ylim(-0.5, 0.8)
+    ax.axis('off')
+    ax.set_title('Рыночное настроение: Страх – Жадность', fontsize=14, pad=15)
+    
+    plt.tight_layout()
+    plt.show()
+
+# ---------- Главный блок ----------
+if __name__ == "__main__":
+    print("Сбор данных...")
+    
+    sources = []
+    
+    # 1. Crypto Fear & Greed
+    val, cls = get_crypto_fear_greed()
+    sources.append(("Crypto (Alt.me)", val, cls if cls else "N/A"))
+    
+    # 2. CNN Fear & Greed (фондовый рынок)
+    val, cls = get_cnn_fear_greed()
+    sources.append(("CNN (Stocks)", val, cls if cls else "N/A"))
+    
+    # 3. Coinbase Premium Index
+    val, cls = get_coinbase_premium()
+    sources.append(("Coinbase Premium", val, cls if cls else "N/A"))
+    
+    # Выводим результаты в консоль
+    for name, val, cls in sources:
+        if val is not None:
+            print(f"{name}: {val} ({cls})")
+        else:
+            print(f"{name}: Данные недоступны")
+    
+    # Рисуем шкалу
+    plot_gauge(sources)
 
 
 
