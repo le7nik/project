@@ -1,4 +1,4 @@
-
+pip install requests matplotlib ccxt beautifulsoup4 #установка зависимостей и библиотек
 
 
 
