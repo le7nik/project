@@ -1,1 +1,131 @@
+# Важно !!! это начальная структура, которая должна в дальнейшем дорабатываться, сделано сугубо для выполнения задачи по созданию сервера и не более.
+# Необходимо две вещи: написать код самого сервера (например, на Python, Go, Node.js или Bash) и дать файлу права на выполнение.
+# Ниже приведены 3 самых простых и популярных способа создания такого сервера.
 
+# Вариант 1. 
+# На Python (Встроенный HTTPS-сервер) Использовался SSL-сертификат (приведен ниже), напишем полноценный HTTPS-сервер на Python, который будет отдавать строку или JSON.
+# Создайте файл (например, в каталоге /opt/app):bashsudo nano /opt/app/server.py
+# Вставьте код (он автоматически подтянет созданные вами ранее server.crt и server.key):
+
+python#!/usr/bin/env python3
+import http.server
+import ssl
+
+server_address = ('0.0.0.0', 8443) # Порт 8443 (или 443)
+httpd = http.server.HTTPServer(server_address, http.server.SimpleHTTPRequestHandler)
+
+# Привязываем SSL-сертификаты
+context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+context.load_cert_chain(certfile="server.crt", keyfile="server.key")
+httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
+
+print(f"Сервер запущен на https://{server_address[0]}:{server_address[1]}")
+httpd.serve_forever()
+
+# Дделаем файл делаем исполняемым:bashsudo chmod +x /opt/app/server.py
+
+# Первая строка #!/usr/bin/env python3 (шебанг) указывает Ubuntu, что этот файл нужно запускать именно через Python.
+
+# Вариант 2. На Node.js (JavaScript)Отличный вариант, если вам нужен быстрый REST API сервер.Создайте файл:bashsudo nano /opt/app/server.js
+# Вставить код:
+javascript#!/usr/bin/env node
+const https = require('https');
+const fs = require('fs');
+
+const options = {
+  key: fs.readFileSync('server.key'),
+  cert: fs.readFileSync('server.crt')
+};
+
+const server = https.createServer(options, (req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ status: "success", message: "Hello from Ubuntu!" }));
+});
+
+server.listen(8443, '0.0.0.0', () => {
+  console.log('Сервер запущен на https://0.0.0');
+});
+
+# Делаем файл исполняемым:
+bashsudo chmod +x /opt/app/server.js
+
+# Вариант 3. Бинарный файл в расширении .bin (Компиляция из Go)Если вам нужен именно монолитный бинарный файл (как в вашем задании server.bin), который не требует установленного Python или Node.js, проще всего скомпилировать его на языке Go.Установите Go (если его нет): sudo apt install golang -y Создайте файл main.go:gopackage main
+
+import (
+    "fmt"
+    "net/http"
+)
+
+func handler(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+    fmt.Fprintf(w, `{"status": "success"}`)
+}
+
+func main() {
+    http.HandleFunc("/", handler)
+    fmt.Println("Сервер запущен на https://0.0.0")
+    // Запуск HTTPS с вашими сертификатами
+    http.ListenAndServeTLS(":8443", "server.crt", "server.key", nil)
+}
+# Скомпилировать его в готовый .bin файл:
+bashgo build -o /opt/app/server.bin main.go
+#Cделать его исполняемым:
+bashsudo chmod +x /opt/app/server.bin
+
+# Как теперь изменить службу systemd? Если создано, например, server.py вместо server.bin, просто открыть конфигурацию службы из прошлого шага (sudo nano /etc/systemd/system/myserver.service) и замените строку запуска:iniExecStart=/opt/app/server.py
+# После этого обновить службу: sudo systemctl daemon-reload && sudo systemctl restart myserver.
+
+# Содержимое файла certificate.pem:
+-----BEGIN CERTIFICATE-----
+MIIDxDCCAqygAwIBAgIUHgMmObJp33//MS9ZagFMrQcLaLYwDQYJKoZIhvcNAQEL
+BQAwaTELMAkGA1UEBhMCUlUxDzANBgNVBAgMBk1vc2NvdzEPMA0GA1UEBwwGTW9z
+Y293MREwDwYDVQQKDAhTZWN1cml0eTEMMAoGA1UECwwDRGV2MRcwFQYDVQQDDA5u
+ZXRvbG9neS5sb2NhbDAeFw0yMTAyMDQxOTE4NTZaFw0zMjA0MjMxOTE4NTZaMGkx
+CzAJBgNVBAYTAlJVMQ8wDQYDVQQIDAZNb3Njb3cxDzANBgNVBAcMBk1vc2NvdzER
+MA8GA1UECgwIU2VjdXJpdHkxDDAKBgNVBAsMA0RldjEXMBUGA1UEAwwObmV0b2xv
+Z3kubG9jYWwwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDXPh101ve/
+BAZXCf8h5biTsC/bgZC5sAeexiGNyerF3jjnySMWANAA2zftabcK7isJGqs5WH7P
+jNGIdI72OUQY3N+6XaBh/Mj30ZsO0nRx3SIntv8+BH0YsvZ/7O/Mx0nJBQ69cKxC
+8V4luImtrz+zZaWJdzF4ZJ7yilH1lEsX8f2wPzBsxvNAEoZPXNuAZdrJi/53PF4R
+ENHS9OVDnk3eK3JLXcHDVkKN/H56iJsoJoU4IN+J9pFHy8+ETfutlYPgbhmiQm5I
+wRW6cXercg+9fhCPAKidYRBByelJRxiBlT2Wi1L6bg1WS22qA576ZhpD8hlNb50G
+21mC6iD3bDkdAgMBAAGjZDBiMB0GA1UdDgQWBBRwKdeU/uWE+VbzoLMP1gBh7ej8
+CDAfBgNVHSMEGDAWgBRwKdeU/uWE+VbzoLMP1gBh7ej8CDAPBgNVHRMBAf8EBTAD
+AQH/MA8GA1UdEQQIMAaHBAAAAAAwDQYJKoZIhvcNAQELBQADggEBACR6piK8OsMw
+iVDhLN2Xy7deVUTojHyNlyMju8sXV34OPsFCCHzF7a4QJ0VSPr8XHgyJHSsazJNW
+df3DipQYNbp0ygHa2qnCCdqv6p4P0MLDIJHTL+N9UXKXY2GD/eCz2otOYH3ZEIjg
+vGttfVMlm4q5ozTxGgTRuoF0BhNHBd8tpg65uX2fRAy9/UopwwtDM0ZN7qB7wUwG
+0l4Gm/bSsPJMxNRHDsVzlfek3PmkOcvpJEfY9oNahzhKf7sk/3FQO5WhFxkAV9bj
+1mgRGj4lKJ25mgm9dNLw+0Kt+nI+hlNrdPIZ75TdBdq4LYduHr7uE6ZjXY4PNWL2
+kP8YZrx5fwg=
+-----END CERTIFICATE-----
+
+# Содержимое файла key.pem:
+-----BEGIN PRIVATE KEY-----
+MIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQDXPh101ve/BAZX
+Cf8h5biTsC/bgZC5sAeexiGNyerF3jjnySMWANAA2zftabcK7isJGqs5WH7PjNGI
+dI72OUQY3N+6XaBh/Mj30ZsO0nRx3SIntv8+BH0YsvZ/7O/Mx0nJBQ69cKxC8V4l
+uImtrz+zZaWJdzF4ZJ7yilH1lEsX8f2wPzBsxvNAEoZPXNuAZdrJi/53PF4RENHS
+9OVDnk3eK3JLXcHDVkKN/H56iJsoJoU4IN+J9pFHy8+ETfutlYPgbhmiQm5IwRW6
+cXercg+9fhCPAKidYRBByelJRxiBlT2Wi1L6bg1WS22qA576ZhpD8hlNb50G21mC
+6iD3bDkdAgMBAAECggEBAKiYiO4qK+i9OFIZDHT6wXc9fF8Nv9US4wUk4Md1L6ZJ
+iH1V+VuUy1jAXbBjK/Mt1xvMfe3vOXVNMhsWYZzQAl0PNVd/Ws8l+CzVTAVyJ6/A
+rK47Evb7ARnFpHtTlgnq2ArTIVaV2Pieo0YcpAsdyGG27tEcQe2xsyb73XLk82UO
+wTwauKJQxZP0ExV52Vf6dhEf91AnfEvaI5MswG/04ZC/EpLetISGwcnTSZqDmh6o
+64ENxF+NSCU7viS+fe+jJERBh/MVPlNUc1gQzWXASatzohoVKNd9MOxjq084zWaH
+jdIyDX/93ihkHV6KLJ1K46vLx7w41VxcHNnsZNwqYKkCgYEA+wzW50tvhiEfXhxN
+LilLb2CAGU17osDRyEjGJ9sDQPhEcBrvn5rZdllVVGeE8OtCpAf3Qmic7VLYnk+0
+p1ZYJ7o115ZjNiUTgZmHYT7oDvhFgzYUdK7TxOYLYYSXfjjCkQxClf2zYySy1U7z
+1HurUKeOD1oaACAo+BAOF9URRqsCgYEA23yKEEYbtouMHxsCcAqiYi0z8rocbfB0
+a6BiAfSnDSY1/DmeqNRcfZvEilLICbJbhpNOhSLwDuyfUJnSIys4MadNjR3opceQ
+s2oDKiZLY8hWE7yvbWNi0ECun5yHzcDLT76JusrxT6EkjNAJrmQpYh5LJXfvPi7e
+27LTbJ77n1cCgYEArSRixqxJIzmO16ovNKn4Q71LO6grn8jaJgbC21P6P4G6OZLq
+NqpmVnAwIIEwt7OZh2WTCzL5H9hmW3DfSBWNwQB1B9XJYNtbQ6OuMcxf4Ysq7d6L
+Zxn4JbD+omf+z2e4EK9i8O1DHhp+WA0WrzIHqh2VJVNf4TxM5SC1h4xEWPcCgYEA
+1mw3kSh8wHxZ+rVvTzgEZbdVbccGKR1lDxQTS2fQn1b6HJvJ9ZPpe8jmXF/9DwQQ
+yEs2xXhZX6spBRwRH8yETHXunHNgqjxpj+18g/v/YM8B0KxgEZSrn1nhfwrz3T2B
+Ijm54iOLVcjOpUZEfvtZNoLz1PnzXyN5EtcEF7TFi2cCgYAh9cZG/iP7zycjAEuE
+OUlkX7FsqWc7rEBJLRM3+DiX/UTS97HHRyKlaxv+7166OkW5aQLiLUzfuUl3BGrg
+bKNwlBmcsnOnFOmQByW94xxy/Yhw7V7FT7N4oCAPDvWCQ81wHc+wSgHMNBXcRNhK
+J8oYdnXFvU3+mkmV+6ynHp6QAA==
+-----END PRIVATE KEY-----
