@@ -1,0 +1,54 @@
+# powershell
+param (
+    $Mode,
+    $Text
+)
+
+# 1. Проверяем количество параметров скрипта
+# В PowerShell встроенный массив $args содержит параметры, переданные без явных имён.
+# Если мы используем блок param(), то общее число переданных аргументов проверяется через $args.Count плюс объявленные переменные.
+# Самый надежный способ проверить точное количество переданных параметров:
+if ($PSBoundParameters.Count -ne 2) {
+    Write-Error "Ошибка: Скрипт требует ровно 2 аргумента."
+    Write-Output "Использование: .\script.ps1 [crypt|decrypt] `"строка`""
+    exit 1
+}
+
+# 2. Проверяем режим работы через конструкцию switch
+switch ($Mode) {
+    "crypt" {
+        Write-Output "Encrypting..."
+        
+        # Переводим строку в массив байт (в кодировке UTF8)
+        $Bytes = [System.Text.Encoding]::UTF8.GetBytes($Text)
+        
+        # Кодируем массив байт в строку Base64
+        $Base64 = [System.Convert]::ToBase64String($Bytes)
+        
+        Write-Output $Base64
+    }
+    
+    "decrypt" {
+        Write-Output "Decrypting..."
+        
+        try {
+            # Декодируем строку Base64 обратно в массив байт
+            $Bytes = [System.Convert]::FromBase64String($Text)
+            
+            # Переводим байты обратно в обычный текст
+            $PlainText = [System.Text.Encoding]::UTF8.GetString($Bytes)
+            
+            Write-Output $PlainText
+        }
+        catch {
+            Write-Error "Ошибка: Переданная строка не является валидным Base64."
+            exit 3
+        }
+    }
+    
+    default {
+        # 3. Если передан любой другой режим — выходим с ошибкой
+        Write-Error "Ошибка: Неверный режим '$Mode'. Допустимы только 'crypt' или 'decrypt'."
+        exit 2
+    }
+}
