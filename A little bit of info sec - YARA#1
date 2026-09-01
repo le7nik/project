@@ -1,0 +1,31 @@
+rule Detect_Network_Backdoors
+{
+    meta:
+        description = "Обнаружение инструментов для создания скрытых сетевых соединений (Reverse Shells)"
+        author = "Студент"
+        category = "Network Exfiltration / Backdoors"
+        severity = "Critical"
+
+    strings:
+        // Системные функции Windows для работы с сетью и сокетами
+        $net_init = "WSAStartup" ascii
+        $net_socket = "WSASocket" ascii
+        $net_connect = "connect" ascii
+        
+        // Характерные строки командной строки для перенаправления ввода-вывода в сеть
+        $cmd_syntax1 = "cmd.exe /c" wide ascii
+        $cmd_syntax2 = "powershell -nop -w hidden" wide ascii
+        
+        // Подозрительные сетевые библиотеки, часто вшиваемые в малварь
+        $lib_net = "WS2_32.dll" ascii
+
+    condition:
+        // Проверяем, что это исполняемый файл
+        uint16(0) == 0x5A4D and 
+        
+        // Ищем комбинацию сетевых функций вместе с вызовом командной строки (признак обратного шелла)
+        (
+            $lib_net and $net_socket and $net_connect and 
+            ($cmd_syntax1 or $cmd_syntax2)
+        )
+}
