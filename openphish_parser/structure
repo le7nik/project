@@ -1,0 +1,7 @@
+.
+├── parser.py            # скрипт парсера
+├── requirements.txt     # зависимости
+├── README.md            # описание
+└── data/
+    ├── phishing.db      # база SQLite (создаётся автоматически)
+    └── phishing_report.xlsx  # Excel-отчёт (создаётся автоматически)
